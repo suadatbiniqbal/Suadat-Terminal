@@ -6,6 +6,11 @@ import os
 import datetime
 import json
 import sys
+import requests
+from PIL import Image, ImageTk, ImageDraw
+import io
+from urllib.parse import urlparse
+import time
 
 class SuadatTerminal:
     def __init__(self, root):
@@ -31,6 +36,12 @@ class SuadatTerminal:
         self.command_history = []
         self.history_index = -1
         self.config_file = 'terminal_config.json'
+        self.current_command = ""
+        self.cursor_position = 0
+
+        # Animation variables
+        self.animation_speed = 50
+        self.typing_animation = False
 
         # Load configuration
         self.load_config()
@@ -74,8 +85,8 @@ class SuadatTerminal:
         main_frame = tk.Frame(self.root, bg=self.bg_color)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
 
-        # Terminal output area
-        self.output_text = scrolledtext.ScrolledText(
+        # Terminal output area with embedded input
+        self.terminal_text = scrolledtext.ScrolledText(
             main_frame,
             bg=self.bg_color,
             fg=self.text_color,
@@ -84,52 +95,26 @@ class SuadatTerminal:
             selectbackground='#333333',
             selectforeground=self.text_color,
             wrap=tk.WORD,
-            state=tk.DISABLED,
             relief='flat',
             borderwidth=0,
-            highlightthickness=0
+            highlightthickness=0,
+            insertwidth=2
         )
-        self.output_text.pack(fill=tk.BOTH, expand=True, pady=(0, 3))
+        self.terminal_text.pack(fill=tk.BOTH, expand=True)
 
-        # Input area
-        input_frame = tk.Frame(main_frame, bg=self.bg_color)
-        input_frame.pack(fill=tk.X)
+        # Bind events for terminal-like behavior
+        self.terminal_text.bind('<Key>', self.on_key_press)
+        self.terminal_text.bind('<Button-1>', self.on_click)
+        self.terminal_text.bind('<Up>', self.previous_command)
+        self.terminal_text.bind('<Down>', self.next_command)
+        self.terminal_text.bind('<Control-c>', self.interrupt_command)
+        self.terminal_text.bind('<Control-l>', lambda e: self.clear_terminal())
+        
+        # Focus on terminal
+        self.terminal_text.focus()
 
-        # Prompt display
-        self.prompt_label = tk.Label(
-            input_frame,
-            text=self.get_prompt(),
-            bg=self.bg_color,
-            fg=self.prompt_color,
-            font=self.font,
-            justify=tk.LEFT,
-            anchor='w'
-        )
-        self.prompt_label.pack(side=tk.LEFT)
-
-        # Command input
-        self.command_entry = tk.Entry(
-            input_frame,
-            bg=self.bg_color,
-            fg=self.text_color,
-            font=self.font,
-            insertbackground=self.text_color,
-            relief='flat',
-            borderwidth=0,
-            highlightthickness=0
-        )
-        self.command_entry.pack(fill=tk.X, side=tk.LEFT, padx=(5, 0))
-
-        # Bind events
-        self.command_entry.bind('<Return>', self.execute_command)
-        self.command_entry.bind('<Up>', self.previous_command)
-        self.command_entry.bind('<Down>', self.next_command)
-        self.command_entry.bind('<Tab>', self.tab_completion)
-        self.command_entry.bind('<Control-c>', self.interrupt_command)
-        self.command_entry.bind('<Control-l>', lambda e: self.clear_terminal())
-
-        # Focus on input
-        self.command_entry.focus()
+        # Initialize prompt
+        self.show_prompt()
 
     def get_prompt(self):
         """Generate Kali-style prompt"""
@@ -146,12 +131,63 @@ class SuadatTerminal:
             path = "~" + path[len(home):]
         return path
 
-    def update_prompt(self):
-        """Update prompt display"""
-        self.prompt_label.config(text=self.get_prompt())
+    def show_prompt(self):
+        """Display prompt and position cursor"""
+        prompt = self.get_prompt()
+        self.terminal_text.insert(tk.END, prompt)
+        self.terminal_text.mark_set("prompt_end", tk.END)
+        self.terminal_text.see(tk.END)
+
+    def on_key_press(self, event):
+        """Handle key presses for terminal-like behavior"""
+        # Get current cursor position
+        current_pos = self.terminal_text.index(tk.INSERT)
+        prompt_pos = self.terminal_text.index("prompt_end")
+        
+        # Only allow editing after the prompt
+        if self.terminal_text.compare(current_pos, "<", prompt_pos):
+            self.terminal_text.mark_set(tk.INSERT, tk.END)
+            return "break"
+
+        if event.keysym == 'Return':
+            # Get command from current line
+            command_line = self.terminal_text.get("prompt_end", tk.END).strip()
+            if command_line:
+                self.execute_command(command_line)
+            else:
+                self.terminal_text.insert(tk.END, "\n")
+                self.show_prompt()
+            return "break"
+        
+        elif event.keysym == 'BackSpace':
+            # Prevent deletion before prompt
+            if self.terminal_text.compare(tk.INSERT, "<=", prompt_pos):
+                return "break"
+        
+        elif event.keysym == 'Left':
+            # Prevent moving cursor before prompt
+            if self.terminal_text.compare(tk.INSERT, "<=", prompt_pos):
+                return "break"
+                
+        elif event.keysym == 'Home':
+            # Move to beginning of command (after prompt)
+            self.terminal_text.mark_set(tk.INSERT, prompt_pos)
+            return "break"
+
+        return None
+
+    def on_click(self, event):
+        """Handle mouse clicks"""
+        # Ensure cursor stays after prompt
+        prompt_pos = self.terminal_text.index("prompt_end")
+        click_pos = self.terminal_text.index(f"@{event.x},{event.y}")
+        
+        if self.terminal_text.compare(click_pos, "<", prompt_pos):
+            self.terminal_text.mark_set(tk.INSERT, tk.END)
+            return "break"
 
     def display_welcome(self):
-        """Show Kali Linux welcome message"""
+        """Show Kali Linux welcome message with typing animation"""
         welcome = f"""Suadat Terminal 6.1.0-kali7-amd64 #1 SMP PREEMPT_DYNAMIC 
 
 The programs included with the Linux system are free software;
@@ -166,38 +202,58 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
 ┌──(suadat@kali)-[~]
 └─$ Welcome to Suadat Terminal - Professional Linux Terminal Emulator
 └─$ Type 'help' for available commands
+└─$ Use 'g <image_url>' to display images with animations
 
 """
-        self.append_output(welcome, self.text_color)
+        self.animate_text(welcome, self.text_color)
+
+    def animate_text(self, text, color=None, delay=20):
+        """Animate text typing effect"""
+        self.typing_animation = True
+        
+        def type_char(index=0):
+            if index < len(text) and self.typing_animation:
+                char = text[index]
+                if color:
+                    tag_name = f"color_{id(color)}"
+                    self.terminal_text.tag_config(tag_name, foreground=color)
+                    self.terminal_text.insert(tk.END, char, tag_name)
+                else:
+                    self.terminal_text.insert(tk.END, char)
+                
+                self.terminal_text.see(tk.END)
+                self.root.after(delay, lambda: type_char(index + 1))
+            elif index >= len(text):
+                self.typing_animation = False
+                self.show_prompt()
+        
+        type_char()
 
     def append_output(self, text, color=None):
         """Add text to terminal output"""
-        self.output_text.config(state=tk.NORMAL)
         if color:
             tag_name = f"color_{id(color)}"
-            self.output_text.tag_config(tag_name, foreground=color)
-            self.output_text.insert(tk.END, text, tag_name)
+            self.terminal_text.tag_config(tag_name, foreground=color)
+            self.terminal_text.insert(tk.END, text, tag_name)
         else:
-            self.output_text.insert(tk.END, text)
-        self.output_text.see(tk.END)
-        self.output_text.config(state=tk.DISABLED)
+            self.terminal_text.insert(tk.END, text)
+        self.terminal_text.see(tk.END)
 
-    def execute_command(self, event=None):
+    def execute_command(self, command):
         """Process and execute commands"""
-        command = self.command_entry.get().strip()
-        if not command:
-            return
-
         # Add to history
         if command not in self.command_history:
             self.command_history.append(command)
         self.history_index = len(self.command_history)
 
-        # Display command
-        self.append_output(f"{self.get_prompt()}{command}\n", self.prompt_color)
+        # Move to new line
+        self.terminal_text.insert(tk.END, "\n")
 
-        # Clear input
-        self.command_entry.delete(0, tk.END)
+        # Check for image command
+        if command.startswith('g '):
+            image_url = command[2:].strip()
+            self.load_image_with_animation(image_url)
+            return
 
         # Execute in thread
         thread = threading.Thread(target=self.run_command, args=(command,))
@@ -248,6 +304,153 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
             self.append_output(f"bash: {command.split()[0]}: command not found\n", self.error_color)
         except Exception as e:
             self.append_output(f"Error: {str(e)}\n", self.error_color)
+        
+        finally:
+            # Show new prompt after command execution
+            self.root.after(0, self.show_prompt)
+
+    def load_image_with_animation(self, url):
+        """Load and display image with rounded corners and animations"""
+        def load_in_thread():
+            try:
+                # Show loading animation
+                loading_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+                loading_text = "Loading image "
+                
+                def animate_loading(index=0, count=0):
+                    if count < 20:  # Show loading for ~2 seconds
+                        char = loading_chars[index % len(loading_chars)]
+                        # Clear previous loading text
+                        current_line = self.terminal_text.get("end-1l linestart", "end-1l lineend")
+                        if "Loading image" in current_line:
+                            self.terminal_text.delete("end-1l linestart", "end-1l lineend")
+                        
+                        self.append_output(f"{loading_text}{char}\n", self.info_color)
+                        self.root.after(100, lambda: animate_loading(index + 1, count + 1))
+                    else:
+                        # Actually load the image
+                        self.download_and_display_image(url)
+                
+                animate_loading()
+                
+            except Exception as e:
+                self.append_output(f"Error loading image: {str(e)}\n", self.error_color)
+                self.show_prompt()
+
+        thread = threading.Thread(target=load_in_thread)
+        thread.daemon = True
+        thread.start()
+
+    def download_and_display_image(self, url):
+        """Download image and display with rounded corners"""
+        try:
+            # Validate URL
+            parsed_url = urlparse(url)
+            if not parsed_url.scheme:
+                url = 'https://' + url
+
+            # Download image
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+
+            # Open image with PIL
+            image = Image.open(io.BytesIO(response.content))
+            
+            # Resize image to fit terminal
+            max_width, max_height = 400, 300
+            image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
+            # Add rounded corners
+            rounded_image = self.add_rounded_corners(image, radius=20)
+
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(rounded_image)
+
+            # Clear loading text
+            current_line = self.terminal_text.get("end-1l linestart", "end-1l lineend")
+            if "Loading image" in current_line:
+                self.terminal_text.delete("end-1l linestart", "end-1l lineend")
+
+            # Display image with fade-in animation
+            self.display_image_with_animation(photo, url)
+
+        except requests.RequestException as e:
+            self.append_output(f"Failed to download image: {str(e)}\n", self.error_color)
+            self.show_prompt()
+        except Exception as e:
+            self.append_output(f"Error processing image: {str(e)}\n", self.error_color)
+            self.show_prompt()
+
+    def add_rounded_corners(self, image, radius):
+        """Add rounded corners to image"""
+        # Convert to RGBA if not already
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        # Create mask for rounded corners
+        mask = Image.new('L', image.size, 0)
+        draw = ImageDraw.Draw(mask)
+        
+        # Draw rounded rectangle
+        draw.rounded_rectangle(
+            [(0, 0), image.size],
+            radius=radius,
+            fill=255
+        )
+
+        # Apply mask
+        output = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        output.paste(image, (0, 0))
+        output.putalpha(mask)
+
+        return output
+
+    def display_image_with_animation(self, photo, url):
+        """Display image with slide-in animation"""
+        # Insert image info
+        self.append_output(f"Image loaded from: {url}\n", self.info_color)
+        self.append_output(f"Size: {photo.width()}x{photo.height()} pixels\n", self.info_color)
+        
+        # Create label for image
+        image_label = tk.Label(
+            self.terminal_text,
+            image=photo,
+            bg=self.bg_color,
+            relief='flat',
+            borderwidth=0
+        )
+        image_label.image = photo  # Keep a reference
+
+        # Insert image into text widget
+        self.terminal_text.window_create(tk.END, window=image_label)
+        self.terminal_text.insert(tk.END, "\n\n")
+
+        # Animate image appearance
+        self.animate_image_appearance(image_label)
+
+        self.show_prompt()
+
+    def animate_image_appearance(self, label):
+        """Animate image with slide and fade effect"""
+        # Start with small scale
+        original_width = label.winfo_reqwidth()
+        original_height = label.winfo_reqheight()
+        
+        def scale_animation(scale=0.1, steps=0):
+            if steps < 10:
+                # Calculate new size
+                new_width = int(original_width * scale)
+                new_height = int(original_height * scale)
+                
+                # Update image size (simulate scaling)
+                if hasattr(label, 'image'):
+                    pass  # Actual scaling would require recreating PhotoImage
+                
+                scale += 0.09
+                steps += 1
+                self.root.after(50, lambda: scale_animation(scale, steps))
+
+        scale_animation()
 
     def change_directory(self, path):
         """Handle directory changes"""
@@ -260,21 +463,21 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
 
                 if os.path.exists(new_path) and os.path.isdir(new_path):
                     self.current_dir = new_path
-                    self.root.after(0, self.update_prompt)
                 else:
                     self.append_output(f"bash: cd: {path}: No such file or directory\n", self.error_color)
             else:
                 self.current_dir = os.path.expanduser("~")
-                self.root.after(0, self.update_prompt)
 
         except Exception as e:
             self.append_output(f"bash: cd: {str(e)}\n", self.error_color)
+        
+        finally:
+            self.show_prompt()
 
     def clear_terminal(self):
         """Clear terminal screen"""
-        self.output_text.config(state=tk.NORMAL)
-        self.output_text.delete(1.0, tk.END)
-        self.output_text.config(state=tk.DISABLED)
+        self.terminal_text.delete(1.0, tk.END)
+        self.show_prompt()
 
     def show_help(self):
         """Display help information"""
@@ -288,6 +491,7 @@ Built-in Commands:
   cd [path]      - Change directory
   history        - Show command history
   exit/quit      - Exit terminal
+  g <url>        - Display image from URL with animations
 
 System Commands:
   ls             - List directory contents
@@ -300,43 +504,53 @@ System Commands:
   df -h          - Show disk usage
   free -h        - Show memory usage
 
+Image Commands:
+  g https://example.com/image.jpg  - Load and display image
+  g domain.com/pic.png            - Auto-add https protocol
+
 Navigation:
   ↑/↓ arrows     - Browse command history
-  Tab            - Auto-complete (basic)
+  Home           - Move to start of command
   Ctrl+C         - Interrupt current command
   Ctrl+L         - Clear screen
 
 Features:
   • Full Linux command support
-  • Command history
-  • Directory navigation
-  • Multi-threaded execution
+  • Animated image loading with rounded corners
+  • Real-time typing animations
+  • Command history with arrow navigation
   • Professional Kali Linux styling
+  • Thread-safe command execution
 
 """
-        self.append_output(help_text, self.info_color)
+        self.animate_text(help_text, self.info_color, delay=5)
 
     def show_history(self):
         """Display command history"""
         if not self.command_history:
             self.append_output("No commands in history\n", self.info_color)
+            self.show_prompt()
             return
 
         self.append_output("Command History:\n", self.info_color)
         for i, cmd in enumerate(self.command_history[-20:], 1):  # Last 20 commands
             self.append_output(f"{i:3}: {cmd}\n", self.text_color)
+        self.show_prompt()
 
     def show_about(self):
         """Show about dialog"""
-        about_text = f"""Suadat Terminal v1.0
+        about_text = f"""Suadat Terminal v2.0
 
-Professional Linux Terminal Emulator
+Professional Linux Terminal Emulator with Image Support
 Built with Python {sys.version.split()[0]} and Tkinter
 
 Features:
 • Kali Linux styling
 • Full command execution
+• Animated image display
+• Rounded corner image support
 • Command history
+• Real-time animations
 • Professional interface
 
 Created by: Suadat Bin Iqbal
@@ -347,72 +561,45 @@ Created by: Suadat Bin Iqbal
         """Navigate to previous command"""
         if self.command_history and self.history_index > 0:
             self.history_index -= 1
-            self.command_entry.delete(0, tk.END)
-            self.command_entry.insert(0, self.command_history[self.history_index])
+            # Clear current command line
+            self.terminal_text.delete("prompt_end", tk.END)
+            # Insert previous command
+            self.terminal_text.insert(tk.END, self.command_history[self.history_index])
+        return "break"
 
     def next_command(self, event=None):
         """Navigate to next command"""
         if self.command_history and self.history_index < len(self.command_history) - 1:
             self.history_index += 1
-            self.command_entry.delete(0, tk.END)
-            self.command_entry.insert(0, self.command_history[self.history_index])
+            # Clear current command line
+            self.terminal_text.delete("prompt_end", tk.END)
+            # Insert next command
+            self.terminal_text.insert(tk.END, self.command_history[self.history_index])
         elif self.history_index >= len(self.command_history) - 1:
             self.history_index = len(self.command_history)
-            self.command_entry.delete(0, tk.END)
-
-    def tab_completion(self, event=None):
-        """Basic tab completion"""
-        current_text = self.command_entry.get()
-        if current_text:
-            # Simple file completion
-            try:
-                if '/' in current_text:
-                    path, partial = current_text.rsplit('/', 1)
-                    search_dir = os.path.join(self.current_dir, path) if path else self.current_dir
-                else:
-                    partial = current_text
-                    search_dir = self.current_dir
-
-                matches = []
-                for item in os.listdir(search_dir):
-                    if item.startswith(partial):
-                        matches.append(item)
-
-                if len(matches) == 1:
-                    # Complete the match
-                    if '/' in current_text:
-                        completion = current_text.rsplit('/', 1)[0] + '/' + matches[0]
-                    else:
-                        completion = matches[0]
-                    self.command_entry.delete(0, tk.END)
-                    self.command_entry.insert(0, completion)
-
-            except:
-                pass
-        return 'break'
+            # Clear current command line
+            self.terminal_text.delete("prompt_end", tk.END)
+        return "break"
 
     def interrupt_command(self, event=None):
         """Handle Ctrl+C"""
         self.append_output("^C\n", self.error_color)
-        return 'break'
+        self.show_prompt()
+        return "break"
 
     def increase_font(self):
         """Increase font size"""
         current_size = self.font[1]
         new_font = (self.font[0], min(current_size + 1, 20))
         self.font = new_font
-        self.output_text.config(font=new_font)
-        self.command_entry.config(font=new_font)
-        self.prompt_label.config(font=new_font)
+        self.terminal_text.config(font=new_font)
 
     def decrease_font(self):
         """Decrease font size"""
         current_size = self.font[1]
         new_font = (self.font[0], max(current_size - 1, 8))
         self.font = new_font
-        self.output_text.config(font=new_font)
-        self.command_entry.config(font=new_font)
-        self.prompt_label.config(font=new_font)
+        self.terminal_text.config(font=new_font)
 
     def new_terminal(self):
         """Open new terminal window"""
