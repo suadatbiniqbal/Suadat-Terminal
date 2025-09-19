@@ -106,7 +106,7 @@ fi
 if [ -f "$APP_DIR/suadat_terminal.py" ]; then
     print_success "Application files installed"
 else
-    print_error "Application installation failed"
+    print_error "Application installation failedd"
     exit 1
 fi
 
