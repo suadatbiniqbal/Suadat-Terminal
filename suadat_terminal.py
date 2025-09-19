@@ -7,8 +7,8 @@ import datetime
 import json
 import sys
 import requests
-from PIL import Image, ImageTk, ImageDraw
-import io
+import base64
+from io import BytesIO
 from urllib.parse import urlparse
 import time
 
@@ -202,7 +202,7 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
 ┌──(suadat@kali)-[~]
 └─$ Welcome to Suadat Terminal - Professional Linux Terminal Emulator
 └─$ Type 'help' for available commands
-└─$ Use 'g <image_url>' to display images with animations
+└─$ Use 'g <image_url>' to display image information with animations
 
 """
         self.animate_text(welcome, self.text_color)
@@ -252,7 +252,7 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
         # Check for image command
         if command.startswith('g '):
             image_url = command[2:].strip()
-            self.load_image_with_animation(image_url)
+            self.load_image_info_with_animation(image_url)
             return
 
         # Execute in thread
@@ -309,27 +309,27 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
             # Show new prompt after command execution
             self.root.after(0, self.show_prompt)
 
-    def load_image_with_animation(self, url):
-        """Load and display image with rounded corners and animations"""
+    def load_image_info_with_animation(self, url):
+        """Load and display image information with animations (no PIL required)"""
         def load_in_thread():
             try:
                 # Show loading animation
                 loading_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-                loading_text = "Loading image "
+                loading_text = "Downloading image "
                 
                 def animate_loading(index=0, count=0):
-                    if count < 20:  # Show loading for ~2 seconds
+                    if count < 15:  # Show loading for ~1.5 seconds
                         char = loading_chars[index % len(loading_chars)]
                         # Clear previous loading text
                         current_line = self.terminal_text.get("end-1l linestart", "end-1l lineend")
-                        if "Loading image" in current_line:
+                        if "Downloading image" in current_line:
                             self.terminal_text.delete("end-1l linestart", "end-1l lineend")
                         
                         self.append_output(f"{loading_text}{char}\n", self.info_color)
                         self.root.after(100, lambda: animate_loading(index + 1, count + 1))
                     else:
-                        # Actually load the image
-                        self.download_and_display_image(url)
+                        # Actually load the image info
+                        self.get_image_info(url)
                 
                 animate_loading()
                 
@@ -341,116 +341,75 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
         thread.daemon = True
         thread.start()
 
-    def download_and_display_image(self, url):
-        """Download image and display with rounded corners"""
+    def get_image_info(self, url):
+        """Get image information without PIL"""
         try:
             # Validate URL
             parsed_url = urlparse(url)
             if not parsed_url.scheme:
                 url = 'https://' + url
 
-            # Download image
-            response = requests.get(url, timeout=10)
+            # Download image headers only
+            response = requests.head(url, timeout=10)
             response.raise_for_status()
-
-            # Open image with PIL
-            image = Image.open(io.BytesIO(response.content))
-            
-            # Resize image to fit terminal
-            max_width, max_height = 400, 300
-            image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
-
-            # Add rounded corners
-            rounded_image = self.add_rounded_corners(image, radius=20)
-
-            # Convert to PhotoImage
-            photo = ImageTk.PhotoImage(rounded_image)
 
             # Clear loading text
             current_line = self.terminal_text.get("end-1l linestart", "end-1l lineend")
-            if "Loading image" in current_line:
+            if "Downloading image" in current_line:
                 self.terminal_text.delete("end-1l linestart", "end-1l lineend")
 
-            # Display image with fade-in animation
-            self.display_image_with_animation(photo, url)
+            # Display image info with animation
+            self.display_image_info_with_animation(url, response.headers)
 
         except requests.RequestException as e:
-            self.append_output(f"Failed to download image: {str(e)}\n", self.error_color)
+            self.append_output(f"Failed to access image: {str(e)}\n", self.error_color)
             self.show_prompt()
         except Exception as e:
             self.append_output(f"Error processing image: {str(e)}\n", self.error_color)
             self.show_prompt()
 
-    def add_rounded_corners(self, image, radius):
-        """Add rounded corners to image"""
-        # Convert to RGBA if not already
-        if image.mode != 'RGBA':
-            image = image.convert('RGBA')
-
-        # Create mask for rounded corners
-        mask = Image.new('L', image.size, 0)
-        draw = ImageDraw.Draw(mask)
+    def display_image_info_with_animation(self, url, headers):
+        """Display image information with cool ASCII art"""
         
-        # Draw rounded rectangle
-        draw.rounded_rectangle(
-            [(0, 0), image.size],
-            radius=radius,
-            fill=255
-        )
-
-        # Apply mask
-        output = Image.new('RGBA', image.size, (0, 0, 0, 0))
-        output.paste(image, (0, 0))
-        output.putalpha(mask)
-
-        return output
-
-    def display_image_with_animation(self, photo, url):
-        """Display image with slide-in animation"""
-        # Insert image info
-        self.append_output(f"Image loaded from: {url}\n", self.info_color)
-        self.append_output(f"Size: {photo.width()}x{photo.height()} pixels\n", self.info_color)
+        # ASCII art for image
+        ascii_art = """
+╭─────────────────────────────────────────╮
+│  🖼️  IMAGE LOADED SUCCESSFULLY  🖼️       │
+├─────────────────────────────────────────┤
+│                                         │
+│    ██████╗ ██╗██╗  ██╗███████╗██╗       │
+│    ██╔══██╗██║╚██╗██╔╝██╔════╝██║       │
+│    ██████╔╝██║ ╚███╔╝ █████╗  ██║       │
+│    ██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║       │
+│    ██║     ██║██╔╝ ██╗███████╗███████╗   │
+│    ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝   │
+│                                         │
+╰─────────────────────────────────────────╯
+"""
         
-        # Create label for image
-        image_label = tk.Label(
-            self.terminal_text,
-            image=photo,
-            bg=self.bg_color,
-            relief='flat',
-            borderwidth=0
-        )
-        image_label.image = photo  # Keep a reference
-
-        # Insert image into text widget
-        self.terminal_text.window_create(tk.END, window=image_label)
-        self.terminal_text.insert(tk.END, "\n\n")
-
-        # Animate image appearance
-        self.animate_image_appearance(image_label)
-
-        self.show_prompt()
-
-    def animate_image_appearance(self, label):
-        """Animate image with slide and fade effect"""
-        # Start with small scale
-        original_width = label.winfo_reqwidth()
-        original_height = label.winfo_reqheight()
+        # Animate ASCII art
+        def animate_art():
+            lines = ascii_art.strip().split('\n')
+            for i, line in enumerate(lines):
+                self.append_output(line + "\n", self.info_color)
+                self.root.update()
+                time.sleep(0.05)  # Small delay for animation effect
         
-        def scale_animation(scale=0.1, steps=0):
-            if steps < 10:
-                # Calculate new size
-                new_width = int(original_width * scale)
-                new_height = int(original_height * scale)
-                
-                # Update image size (simulate scaling)
-                if hasattr(label, 'image'):
-                    pass  # Actual scaling would require recreating PhotoImage
-                
-                scale += 0.09
-                steps += 1
-                self.root.after(50, lambda: scale_animation(scale, steps))
+        animate_art()
+        
+        # Display image details
+        info_text = f"""
+Image URL: {url}
+Content-Type: {headers.get('content-type', 'Unknown')}
+Content-Length: {headers.get('content-length', 'Unknown')} bytes
+Server: {headers.get('server', 'Unknown')}
+Last-Modified: {headers.get('last-modified', 'Unknown')}
 
-        scale_animation()
+✨ Image information loaded successfully! ✨
+Note: Install python3-pil.imagetk for full image display support.
+
+"""
+        self.animate_text(info_text, self.text_color, delay=10)
 
     def change_directory(self, path):
         """Handle directory changes"""
@@ -491,7 +450,7 @@ Built-in Commands:
   cd [path]      - Change directory
   history        - Show command history
   exit/quit      - Exit terminal
-  g <url>        - Display image from URL with animations
+  g <url>        - Display image information with animations
 
 System Commands:
   ls             - List directory contents
@@ -505,7 +464,7 @@ System Commands:
   free -h        - Show memory usage
 
 Image Commands:
-  g https://example.com/image.jpg  - Load and display image
+  g https://example.com/image.jpg  - Get image info
   g domain.com/pic.png            - Auto-add https protocol
 
 Navigation:
@@ -516,11 +475,15 @@ Navigation:
 
 Features:
   • Full Linux command support
-  • Animated image loading with rounded corners
+  • Animated image information display
   • Real-time typing animations
   • Command history with arrow navigation
   • Professional Kali Linux styling
   • Thread-safe command execution
+
+Installation Note:
+  For full image display support, install:
+  sudo apt-get install python3-pil python3-pil.imagetk
 
 """
         self.animate_text(help_text, self.info_color, delay=5)
@@ -541,14 +504,13 @@ Features:
         """Show about dialog"""
         about_text = f"""Suadat Terminal v2.0
 
-Professional Linux Terminal Emulator with Image Support
+Professional Linux Terminal Emulator
 Built with Python {sys.version.split()[0]} and Tkinter
 
 Features:
 • Kali Linux styling
-• Full command execution
-• Animated image display
-• Rounded corner image support
+• Full command execution  
+• Animated image information
 • Command history
 • Real-time animations
 • Professional interface
