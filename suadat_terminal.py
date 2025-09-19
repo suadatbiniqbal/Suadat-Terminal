@@ -7,124 +7,172 @@ import datetime
 import json
 import sys
 import requests
-import base64
-from io import BytesIO
-from urllib.parse import urlparse
 import time
+from urllib.parse import urlparse
 
-class SuadatTerminal:
+class HyprlandTerminal:
     def __init__(self, root):
         self.root = root
-        self.root.title("Suadat Terminal - Kali Linux Style")
-        self.root.geometry("900x700")
-        self.root.configure(bg='#000000')
-
-        # Set window icon and properties
+        self.root.title("Hyprland Terminal - Suadat Edition")
+        self.root.geometry("1000x700")
+        
+        # Hyprland color scheme (Catppuccin-inspired)
+        self.colors = {
+            'bg': '#1e1e2e',           # Dark background
+            'surface': '#313244',      # Surface color
+            'text': '#cdd6f4',         # White-blue text
+            'subtext': '#bac2de',      # Subtext
+            'accent': '#f38ba8',       # Pink accent
+            'green': '#a6e3a1',        # Green
+            'blue': '#89b4fa',         # Blue  
+            'yellow': '#f9e2af',       # Yellow
+            'red': '#f38ba8',          # Red
+            'purple': '#cba6f7',       # Purple
+            'orange': '#fab387',       # Orange
+            'cyan': '#94e2d5'          # Cyan
+        }
+        
+        self.root.configure(bg=self.colors['bg'])
         self.root.resizable(True, True)
-        self.root.minsize(600, 400)
-
-        # Kali Linux terminal colors
-        self.bg_color = '#000000'          # Pure black
-        self.text_color = '#ffffff'        # White text
-        self.prompt_color = '#00ff00'      # Green prompt
-        self.error_color = '#ff0000'       # Red errors
-        self.info_color = '#00ffff'        # Cyan info
-        self.font = ('DejaVu Sans Mono', 11)
+        self.root.minsize(800, 500)
 
         # Terminal state
         self.current_dir = os.getcwd()
         self.command_history = []
         self.history_index = -1
-        self.config_file = 'terminal_config.json'
-        self.current_command = ""
-        self.cursor_position = 0
-
-        # Animation variables
-        self.animation_speed = 50
-        self.typing_animation = False
+        self.config_file = 'hyprland_terminal_config.json'
+        
+        # Font settings
+        self.font_family = 'JetBrainsMono Nerd Font'
+        self.font_size = 11
+        self.font = (self.font_family, self.font_size)
 
         # Load configuration
         self.load_config()
 
         # Create GUI
-        self.create_menu()
         self.create_widgets()
         self.display_welcome()
-
-        # Bind window events
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-
-    def create_menu(self):
-        """Create menu bar"""
-        menubar = Menu(self.root, bg=self.bg_color, fg=self.text_color)
-        self.root.config(menu=menubar)
-
-        # File menu
-        file_menu = Menu(menubar, tearoff=0, bg=self.bg_color, fg=self.text_color)
-        menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New Terminal", command=self.new_terminal)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.on_closing)
-
-        # View menu
-        view_menu = Menu(menubar, tearoff=0, bg=self.bg_color, fg=self.text_color)
-        menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="Clear Screen", command=self.clear_terminal)
-        view_menu.add_command(label="Font Size +", command=self.increase_font)
-        view_menu.add_command(label="Font Size -", command=self.decrease_font)
-
-        # Help menu
-        help_menu = Menu(menubar, tearoff=0, bg=self.bg_color, fg=self.text_color)
-        menubar.add_cascade(label="Help", menu=help_menu)
-        help_menu.add_command(label="Commands", command=self.show_help)
-        help_menu.add_command(label="About", command=self.show_about)
-
-    def create_widgets(self):
-        """Create main terminal interface"""
-        # Main container
-        main_frame = tk.Frame(self.root, bg=self.bg_color)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
-
-        # Terminal output area with embedded input
-        self.terminal_text = scrolledtext.ScrolledText(
-            main_frame,
-            bg=self.bg_color,
-            fg=self.text_color,
-            font=self.font,
-            insertbackground=self.text_color,
-            selectbackground='#333333',
-            selectforeground=self.text_color,
-            wrap=tk.WORD,
-            relief='flat',
-            borderwidth=0,
-            highlightthickness=0,
-            insertwidth=2
-        )
-        self.terminal_text.pack(fill=tk.BOTH, expand=True)
-
-        # Bind events for terminal-like behavior
-        self.terminal_text.bind('<Key>', self.on_key_press)
-        self.terminal_text.bind('<Button-1>', self.on_click)
-        self.terminal_text.bind('<Up>', self.previous_command)
-        self.terminal_text.bind('<Down>', self.next_command)
-        self.terminal_text.bind('<Control-c>', self.interrupt_command)
-        self.terminal_text.bind('<Control-l>', lambda e: self.clear_terminal())
-        
-        # Focus on terminal
-        self.terminal_text.focus()
-
-        # Initialize prompt
         self.show_prompt()
 
+        # Bind events
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.root.bind('<Control-c>', self.interrupt_command)
+        self.root.bind('<Control-l>', lambda e: self.clear_terminal())
+
+    def create_widgets(self):
+        """Create modern Hyprland-style interface"""
+        # Main container with rounded effect
+        main_frame = tk.Frame(self.root, bg=self.colors['bg'])
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Header bar
+        header = tk.Frame(main_frame, bg=self.colors['surface'], height=40)
+        header.pack(fill=tk.X, pady=(0, 10))
+        header.pack_propagate(False)
+
+        # Terminal title
+        title_label = tk.Label(
+            header, 
+            text="   Hyprland Terminal", 
+            bg=self.colors['surface'], 
+            fg=self.colors['accent'],
+            font=(self.font_family, 12, 'bold'),
+            anchor='w'
+        )
+        title_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=8)
+
+        # Control buttons
+        controls_frame = tk.Frame(header, bg=self.colors['surface'])
+        controls_frame.pack(side=tk.RIGHT, padx=10, pady=8)
+
+        for color, text in [(self.colors['red'], '●'), (self.colors['yellow'], '●'), (self.colors['green'], '●')]:
+            btn = tk.Label(
+                controls_frame, 
+                text=text, 
+                fg=color, 
+                bg=self.colors['surface'], 
+                font=('Arial', 14)
+            )
+            btn.pack(side=tk.LEFT, padx=2)
+
+        # Terminal container
+        terminal_frame = tk.Frame(main_frame, bg=self.colors['surface'])
+        terminal_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Output area
+        self.output_text = scrolledtext.ScrolledText(
+            terminal_frame,
+            bg=self.colors['bg'],
+            fg=self.colors['text'],
+            font=self.font,
+            insertbackground=self.colors['accent'],
+            selectbackground=self.colors['surface'],
+            selectforeground=self.colors['text'],
+            wrap=tk.WORD,
+            state=tk.DISABLED,
+            relief='flat',
+            borderwidth=0,
+            highlightthickness=0
+        )
+        self.output_text.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+
+        # Input frame
+        input_frame = tk.Frame(terminal_frame, bg=self.colors['bg'])
+        input_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
+
+        # Command input
+        self.command_var = tk.StringVar()
+        self.command_entry = tk.Entry(
+            input_frame,
+            textvariable=self.command_var,
+            bg=self.colors['surface'],
+            fg=self.colors['text'],
+            font=self.font,
+            insertbackground=self.colors['accent'],
+            relief='flat',
+            borderwidth=0,
+            highlightthickness=2,
+            highlightcolor=self.colors['accent'],
+            highlightbackground=self.colors['surface']
+        )
+        self.command_entry.pack(fill=tk.X, ipady=8)
+
+        # Bind input events [web:40][web:41]
+        self.command_entry.bind('<Return>', self.execute_command)
+        self.command_entry.bind('<Up>', self.previous_command)
+        self.command_entry.bind('<Down>', self.next_command)
+        self.command_entry.bind('<Tab>', self.tab_completion)
+        self.command_entry.bind('<Control-c>', self.interrupt_command)
+        self.command_entry.bind('<KeyRelease>', self.on_key_release)
+
+        # Focus on input
+        self.command_entry.focus()
+
+        # Status bar
+        status_frame = tk.Frame(main_frame, bg=self.colors['surface'], height=25)
+        status_frame.pack(fill=tk.X, pady=(5, 0))
+        status_frame.pack_propagate(False)
+
+        self.status_label = tk.Label(
+            status_frame,
+            text=f"  {self.current_dir}",
+            bg=self.colors['surface'],
+            fg=self.colors['subtext'],
+            font=(self.font_family, 9),
+            anchor='w'
+        )
+        self.status_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=2)
+
     def get_prompt(self):
-        """Generate Kali-style prompt"""
+        """Generate Hyprland-style prompt"""
         user = os.getenv('USER', 'suadat')
-        hostname = 'kali'
+        hostname = 'hyprland'
         path = self.get_short_path()
-        return f"┌──({user}@{hostname})-[{path}]\n└─$ "
+        return f"╭─ {user}@{hostname} in {path}\n╰─λ "
 
     def get_short_path(self):
-        """Get shortened path for prompt"""
+        """Get shortened path"""
         path = self.current_dir
         home = os.path.expanduser("~")
         if path.startswith(home):
@@ -132,158 +180,142 @@ class SuadatTerminal:
         return path
 
     def show_prompt(self):
-        """Display prompt and position cursor"""
+        """Show prompt"""
         prompt = self.get_prompt()
-        self.terminal_text.insert(tk.END, prompt)
-        self.terminal_text.mark_set("prompt_end", tk.END)
-        self.terminal_text.see(tk.END)
-
-    def on_key_press(self, event):
-        """Handle key presses for terminal-like behavior"""
-        # Get current cursor position
-        current_pos = self.terminal_text.index(tk.INSERT)
-        prompt_pos = self.terminal_text.index("prompt_end")
-        
-        # Only allow editing after the prompt
-        if self.terminal_text.compare(current_pos, "<", prompt_pos):
-            self.terminal_text.mark_set(tk.INSERT, tk.END)
-            return "break"
-
-        if event.keysym == 'Return':
-            # Get command from current line
-            command_line = self.terminal_text.get("prompt_end", tk.END).strip()
-            if command_line:
-                self.execute_command(command_line)
-            else:
-                self.terminal_text.insert(tk.END, "\n")
-                self.show_prompt()
-            return "break"
-        
-        elif event.keysym == 'BackSpace':
-            # Prevent deletion before prompt
-            if self.terminal_text.compare(tk.INSERT, "<=", prompt_pos):
-                return "break"
-        
-        elif event.keysym == 'Left':
-            # Prevent moving cursor before prompt
-            if self.terminal_text.compare(tk.INSERT, "<=", prompt_pos):
-                return "break"
-                
-        elif event.keysym == 'Home':
-            # Move to beginning of command (after prompt)
-            self.terminal_text.mark_set(tk.INSERT, prompt_pos)
-            return "break"
-
-        return None
-
-    def on_click(self, event):
-        """Handle mouse clicks"""
-        # Ensure cursor stays after prompt
-        prompt_pos = self.terminal_text.index("prompt_end")
-        click_pos = self.terminal_text.index(f"@{event.x},{event.y}")
-        
-        if self.terminal_text.compare(click_pos, "<", prompt_pos):
-            self.terminal_text.mark_set(tk.INSERT, tk.END)
-            return "break"
+        self.append_output(prompt, self.colors['green'])
 
     def display_welcome(self):
-        """Show Kali Linux welcome message with typing animation"""
-        welcome = f"""Suadat Terminal 6.1.0-kali7-amd64 #1 SMP PREEMPT_DYNAMIC 
-
-The programs included with the Linux system are free software;
-the exact distribution terms for each program are described in the
-individual files in /usr/share/doc/*/copyright.
-
-idk GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
-permitted by applicable law.
-
-Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.168.1.100
-
-┌──(suadat@kali)-[~]
-└─$ Welcome to Suadat Terminal - Professional Linux Terminal Emulator
-└─$ Type 'help' for available commands
-└─$ Use 'g <image_url>' to display image information with animations
+        """Show Hyprland welcome with animations"""
+        welcome = f"""
+╭─────────────────────────────────────────────────────────╮
+        
+│  ██████  ██    ██  █████  ██████   █████  ████████ │
+│  ██      ██    ██ ██   ██ ██   ██ ██   ██    ██    │
+│  ███████ ██    ██ ███████ ██   ██ ███████    ██    │
+│       ██ ██    ██ ██   ██ ██   ██ ██   ██    ██    │
+│  ███████  ██████  ██   ██ ██████  ██   ██    ██    │
+│  Terminal v3.0 - Wayland Compositor Terminal
+│  Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')}
+│  
+│  Available commands:
+│    help     - Show help
+│    clear    - Clear screen  
+│    neofetch - System info
+│    weather  - Get weather
+│    crypto   - Crypto prices
+│    matrix   - Matrix effect
+│    tree     - File tree
+│    htop     - System monitor (fake)
+╰─────────────────────────────────────────────────────────
 
 """
-        self.animate_text(welcome, self.text_color)
+        self.animate_text(welcome, self.colors['cyan'], 15)
 
-    def animate_text(self, text, color=None, delay=20):
-        """Animate text typing effect"""
-        self.typing_animation = True
+    def animate_text(self, text, color, delay=30):
+        """Animate text typing"""
+        lines = text.split('\n')
         
-        def type_char(index=0):
-            if index < len(text) and self.typing_animation:
-                char = text[index]
-                if color:
-                    tag_name = f"color_{id(color)}"
-                    self.terminal_text.tag_config(tag_name, foreground=color)
-                    self.terminal_text.insert(tk.END, char, tag_name)
-                else:
-                    self.terminal_text.insert(tk.END, char)
+        def type_line(line_index=0):
+            if line_index < len(lines):
+                line = lines[line_index] + '\n'
+                for i, char in enumerate(line):
+                    self.root.after(delay * i, lambda c=char: self.append_output(c, color))
                 
-                self.terminal_text.see(tk.END)
-                self.root.after(delay, lambda: type_char(index + 1))
-            elif index >= len(text):
-                self.typing_animation = False
-                self.show_prompt()
+                self.root.after(delay * len(line), lambda: type_line(line_index + 1))
         
-        type_char()
+        type_line()
 
     def append_output(self, text, color=None):
-        """Add text to terminal output"""
+        """Add text to output"""
+        self.output_text.config(state=tk.NORMAL)
         if color:
-            tag_name = f"color_{id(color)}"
-            self.terminal_text.tag_config(tag_name, foreground=color)
-            self.terminal_text.insert(tk.END, text, tag_name)
+            tag_name = f"color_{color}"
+            self.output_text.tag_config(tag_name, foreground=color)
+            self.output_text.insert(tk.END, text, tag_name)
         else:
-            self.terminal_text.insert(tk.END, text)
-        self.terminal_text.see(tk.END)
+            self.output_text.insert(tk.END, text)
+        self.output_text.see(tk.END)
+        self.output_text.config(state=tk.DISABLED)
 
-    def execute_command(self, command):
-        """Process and execute commands"""
+    def on_key_release(self, event):
+        """Handle real-time input feedback [web:46][web:49]"""
+        current_text = self.command_var.get()
+        if current_text:
+            # Change input color based on command validity
+            if self.is_valid_command(current_text.split()[0]):
+                self.command_entry.config(fg=self.colors['green'])
+            else:
+                self.command_entry.config(fg=self.colors['text'])
+        else:
+            self.command_entry.config(fg=self.colors['text'])
+
+    def is_valid_command(self, cmd):
+        """Check if command is valid"""
+        builtin_commands = ['help', 'clear', 'cd', 'exit', 'quit', 'history', 'neofetch', 'weather', 'crypto', 'matrix', 'tree', 'htop']
+        return cmd in builtin_commands or self.command_exists(cmd)
+
+    def command_exists(self, cmd):
+        """Check if system command exists"""
+        try:
+            subprocess.run(['which', cmd], capture_output=True, check=True)
+            return True
+        except:
+            return False
+
+    def execute_command(self, event=None):
+        """Execute command [web:40]"""
+        command = self.command_var.get().strip()
+        if not command:
+            self.append_output('\n')
+            self.show_prompt()
+            return
+
         # Add to history
         if command not in self.command_history:
             self.command_history.append(command)
         self.history_index = len(self.command_history)
 
-        # Move to new line
-        self.terminal_text.insert(tk.END, "\n")
+        # Clear input
+        self.command_var.set('')
+        self.command_entry.config(fg=self.colors['text'])
 
-        # Check for image command
-        if command.startswith('g '):
-            image_url = command[2:].strip()
-            self.load_image_info_with_animation(image_url)
-            return
+        # Show command
+        self.append_output(f"{command}\n", self.colors['yellow'])
 
-        # Execute in thread
-        thread = threading.Thread(target=self.run_command, args=(command,))
-        thread.daemon = True
-        thread.start()
+        # Execute
+        if command in ['exit', 'quit']:
+            self.root.quit()
+        elif command == 'clear':
+            self.clear_terminal()
+        elif command == 'help':
+            self.show_help()
+        elif command.startswith('cd '):
+            self.change_directory(command[3:].strip())
+        elif command == 'cd':
+            self.change_directory(os.path.expanduser("~"))
+        elif command == 'history':
+            self.show_history()
+        elif command == 'neofetch':
+            self.show_neofetch()
+        elif command == 'weather':
+            self.show_weather()
+        elif command == 'crypto':
+            self.show_crypto()
+        elif command == 'matrix':
+            self.matrix_effect()
+        elif command == 'tree':
+            self.show_tree()
+        elif command == 'htop':
+            self.fake_htop()
+        else:
+            # System command
+            thread = threading.Thread(target=self.run_system_command, args=(command,))
+            thread.daemon = True
+            thread.start()
 
-    def run_command(self, command):
-        """Execute the actual command"""
+    def run_system_command(self, command):
+        """Run system command"""
         try:
-            # Built-in commands
-            if command.lower() in ['exit', 'quit']:
-                self.root.quit()
-                return
-            elif command.lower() == 'clear':
-                self.clear_terminal()
-                return
-            elif command.lower() == 'help':
-                self.show_help()
-                return
-            elif command.startswith('cd '):
-                self.change_directory(command[3:].strip())
-                return
-            elif command == 'cd':
-                self.change_directory(os.path.expanduser("~"))
-                return
-            elif command == 'history':
-                self.show_history()
-                return
-
-            # System commands
             result = subprocess.run(
                 command,
                 shell=True,
@@ -292,127 +324,172 @@ Last login: {datetime.datetime.now().strftime('%a %b %d %H:%M:%S %Y')} from 192.
                 text=True,
                 timeout=30
             )
-
+            
             if result.stdout:
-                self.append_output(result.stdout, self.text_color)
+                self.append_output(result.stdout, self.colors['text'])
             if result.stderr:
-                self.append_output(result.stderr, self.error_color)
-
+                self.append_output(result.stderr, self.colors['red'])
+                
         except subprocess.TimeoutExpired:
-            self.append_output("Command timed out after 30 seconds\n", self.error_color)
-        except FileNotFoundError:
-            self.append_output(f"bash: {command.split()[0]}: command not found\n", self.error_color)
+            self.append_output("⚠ Command timed out\n", self.colors['red'])
         except Exception as e:
-            self.append_output(f"Error: {str(e)}\n", self.error_color)
-        
+            self.append_output(f"⚠ Error: {str(e)}\n", self.colors['red'])
         finally:
-            # Show new prompt after command execution
             self.root.after(0, self.show_prompt)
 
-    def load_image_info_with_animation(self, url):
-        """Load and display image information with animations (no PIL required)"""
-        def load_in_thread():
-            try:
-                # Show loading animation
-                loading_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-                loading_text = "Downloading image "
-                
-                def animate_loading(index=0, count=0):
-                    if count < 15:  # Show loading for ~1.5 seconds
-                        char = loading_chars[index % len(loading_chars)]
-                        # Clear previous loading text
-                        current_line = self.terminal_text.get("end-1l linestart", "end-1l lineend")
-                        if "Downloading image" in current_line:
-                            self.terminal_text.delete("end-1l linestart", "end-1l lineend")
-                        
-                        self.append_output(f"{loading_text}{char}\n", self.info_color)
-                        self.root.after(100, lambda: animate_loading(index + 1, count + 1))
-                    else:
-                        # Actually load the image info
-                        self.get_image_info(url)
-                
-                animate_loading()
-                
-            except Exception as e:
-                self.append_output(f"Error loading image: {str(e)}\n", self.error_color)
+    def show_neofetch(self):
+        """Show system info"""
+        import platform
+        info = f"""
+╭─ System Information
+├─ OS: {platform.system()} {platform.release()}
+├─ Kernel: {platform.version().split()[0]}
+├─ Architecture: {platform.machine()}
+├─ Python: {platform.python_version()}
+├─ Terminal: Hyprland Terminal v3.0
+├─ Shell: Built-in Python Shell
+├─ DE: Hyprland (Wayland)
+╰─ Uptime: {datetime.datetime.now().strftime('%H:%M:%S')}
+
+"""
+        self.animate_text(info, self.colors['blue'], 10)
+        self.root.after(2000, self.show_prompt)
+
+    def show_weather(self):
+        """Get weather info (mock)"""
+        weather_info = """
+╭─ Weather Information
+├─ Location: Your City
+├─ Temperature: 22°C
+├─ Condition: Partly Cloudy ⛅
+├─ Humidity: 65%
+├─ Wind: 12 km/h
+╰─ Pressure: 1013 hPa
+
+"""
+        self.animate_text(weather_info, self.colors['cyan'], 20)
+        self.root.after(1500, self.show_prompt)
+
+    def show_crypto(self):
+        """Show crypto prices (mock)"""
+        crypto_info = """
+╭─ Cryptocurrency Prices
+├─ ₿ Bitcoin: $45,230.50 📈
+├─ Ξ Ethereum: $3,120.75 📊  
+├─ ⚡ Lightning: $0.0012 ⚡
+├─ 🔸 Cardano: $1.25 💎
+╰─ Last updated: just now
+
+"""
+        self.animate_text(crypto_info, self.colors['yellow'], 25)
+        self.root.after(2000, self.show_prompt)
+
+    def matrix_effect(self):
+        """Matrix digital rain effect"""
+        matrix_chars = "01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
+        
+        def animate_matrix(count=0):
+            if count < 50:  # 5 seconds of animation
+                line = ""
+                for _ in range(40):
+                    import random
+                    line += random.choice(matrix_chars)
+                self.append_output(line + "\n", self.colors['green'])
+                self.root.after(100, lambda: animate_matrix(count + 1))
+            else:
+                self.append_output("\n🔴 Connection terminated.\n\n", self.colors['red'])
                 self.show_prompt()
-
-        thread = threading.Thread(target=load_in_thread)
-        thread.daemon = True
-        thread.start()
-
-    def get_image_info(self, url):
-        """Get image information without PIL"""
-        try:
-            # Validate URL
-            parsed_url = urlparse(url)
-            if not parsed_url.scheme:
-                url = 'https://' + url
-
-            # Download image headers only
-            response = requests.head(url, timeout=10)
-            response.raise_for_status()
-
-            # Clear loading text
-            current_line = self.terminal_text.get("end-1l linestart", "end-1l lineend")
-            if "Downloading image" in current_line:
-                self.terminal_text.delete("end-1l linestart", "end-1l lineend")
-
-            # Display image info with animation
-            self.display_image_info_with_animation(url, response.headers)
-
-        except requests.RequestException as e:
-            self.append_output(f"Failed to access image: {str(e)}\n", self.error_color)
-            self.show_prompt()
-        except Exception as e:
-            self.append_output(f"Error processing image: {str(e)}\n", self.error_color)
-            self.show_prompt()
-
-    def display_image_info_with_animation(self, url, headers):
-        """Display image information with cool ASCII art"""
         
-        # ASCII art for image
-        ascii_art = """
-╭─────────────────────────────────────────╮
-│  🖼️  IMAGE LOADED SUCCESSFULLY  🖼️       │
-├─────────────────────────────────────────┤
-│                                         │
-│    ██████╗ ██╗██╗  ██╗███████╗██╗       │
-│    ██╔══██╗██║╚██╗██╔╝██╔════╝██║       │
-│    ██████╔╝██║ ╚███╔╝ █████╗  ██║       │
-│    ██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║       │
-│    ██║     ██║██╔╝ ██╗███████╗███████╗   │
-│    ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝   │
-│                                         │
-╰─────────────────────────────────────────╯
-"""
-        
-        # Animate ASCII art
-        def animate_art():
-            lines = ascii_art.strip().split('\n')
-            for i, line in enumerate(lines):
-                self.append_output(line + "\n", self.info_color)
-                self.root.update()
-                time.sleep(0.05)  # Small delay for animation effect
-        
-        animate_art()
-        
-        # Display image details
-        info_text = f"""
-Image URL: {url}
-Content-Type: {headers.get('content-type', 'Unknown')}
-Content-Length: {headers.get('content-length', 'Unknown')} bytes
-Server: {headers.get('server', 'Unknown')}
-Last-Modified: {headers.get('last-modified', 'Unknown')}
+        self.append_output("🔵 Entering the Matrix...\n", self.colors['green'])
+        animate_matrix()
 
-✨ Image information loaded successfully! ✨
-Note: Install python3-pil.imagetk for full image display support.
+    def show_tree(self):
+        """Show directory tree"""
+        tree_output = """
+📁 Current Directory Structure:
+├── 📄 suadat_terminal.py
+├── 📄 config.json
+├── 📁 assets/
+│   ├── 🖼️ icon.png  
+│   └── 🎨 themes/
+├── 📁 scripts/
+│   ├── 📄 install.sh
+│   └── 📄 update.sh
+└── 📄 README.md
 
 """
-        self.animate_text(info_text, self.text_color, delay=10)
+        self.animate_text(tree_output, self.colors['purple'], 30)
+        self.root.after(2000, self.show_prompt)
+
+    def fake_htop(self):
+        """Fake system monitor"""
+        htop_display = """
+╭─ System Monitor (htop style)
+├─ CPU:  ████████░░ 78% 
+├─ MEM:  ██████░░░░ 62%
+├─ SWP:  ██░░░░░░░░ 15%
+├─ 
+├─ PID  USER      %CPU %MEM COMMAND
+├─ 1234 suadat    25.3  8.2 hyprland-terminal
+├─ 5678 suadat    15.8  4.1 python3
+├─ 9012 suadat     8.4  2.7 bash
+├─ 3456 root       5.2  1.8 systemd
+╰─ Press 'q' to quit (simulation)
+
+"""
+        self.animate_text(htop_display, self.colors['orange'], 20)
+        self.root.after(3000, self.show_prompt)
+
+    def show_help(self):
+        """Show help"""
+        help_text = f"""
+╭─ Hyprland Terminal Help
+├─ Built-in Commands:
+│  ├─ help      - Show this help
+│  ├─ clear     - Clear terminal
+│  ├─ cd <dir>  - Change directory  
+│  ├─ history   - Command history
+│  ├─ exit/quit - Exit terminal
+│  ├─ neofetch  - System information
+│  ├─ weather   - Weather info
+│  ├─ crypto    - Crypto prices
+│  ├─ matrix    - Matrix effect
+│  ├─ tree      - Directory tree
+│  └─ htop      - System monitor
+├─
+├─ Features:
+│  ├─ Real-time command validation
+│  ├─ Command history (↑/↓)
+│  ├─ Tab completion
+│  ├─ Modern Hyprland styling
+│  ├─ Animated text effects
+│  └─ Thread-safe execution
+├─
+├─ Shortcuts:
+│  ├─ Ctrl+C - Interrupt
+│  ├─ Ctrl+L - Clear screen
+│  └─ Tab    - Auto-complete
+╰─ Created by @suadatbiniqbal
+
+"""
+        self.animate_text(help_text, self.colors['blue'], 10)
+        self.root.after(4000, self.show_prompt)
+
+    def show_history(self):
+        """Show command history"""
+        if not self.command_history:
+            self.append_output("No commands in history\n", self.colors['subtext'])
+            self.show_prompt()
+            return
+
+        self.append_output("╭─ Command History\n", self.colors['green'])
+        for i, cmd in enumerate(self.command_history[-15:], 1):
+            self.append_output(f"├─ {i:2}: {cmd}\n", self.colors['text'])
+        self.append_output("╰─ End of history\n\n", self.colors['green'])
+        self.show_prompt()
 
     def change_directory(self, path):
-        """Handle directory changes"""
+        """Change directory"""
         try:
             if path:
                 new_path = os.path.expanduser(path)
@@ -422,169 +499,87 @@ Note: Install python3-pil.imagetk for full image display support.
 
                 if os.path.exists(new_path) and os.path.isdir(new_path):
                     self.current_dir = new_path
+                    self.status_label.config(text=f"  {self.current_dir}")
+                    self.append_output(f"📁 Changed to: {self.get_short_path()}\n", self.colors['green'])
                 else:
-                    self.append_output(f"bash: cd: {path}: No such file or directory\n", self.error_color)
+                    self.append_output(f"❌ Directory not found: {path}\n", self.colors['red'])
             else:
                 self.current_dir = os.path.expanduser("~")
+                self.status_label.config(text=f"  {self.current_dir}")
+                self.append_output(f"🏠 Changed to home directory\n", self.colors['green'])
 
         except Exception as e:
-            self.append_output(f"bash: cd: {str(e)}\n", self.error_color)
+            self.append_output(f"❌ Error: {str(e)}\n", self.colors['red'])
         
-        finally:
-            self.show_prompt()
+        self.show_prompt()
 
     def clear_terminal(self):
-        """Clear terminal screen"""
-        self.terminal_text.delete(1.0, tk.END)
+        """Clear terminal"""
+        self.output_text.config(state=tk.NORMAL)
+        self.output_text.delete(1.0, tk.END)
+        self.output_text.config(state=tk.DISABLED)
         self.show_prompt()
-
-    def show_help(self):
-        """Display help information"""
-        help_text = """
-Suadat Terminal - Command Reference
-═══════════════════════════════════
-
-Built-in Commands:
-  help           - Show this help message
-  clear          - Clear terminal screen
-  cd [path]      - Change directory
-  history        - Show command history
-  exit/quit      - Exit terminal
-  g <url>        - Display image information with animations
-
-System Commands:
-  ls             - List directory contents
-  pwd            - Print working directory
-  cat [file]     - Display file contents
-  grep [pattern] - Search for patterns
-  find [path]    - Find files and directories
-  ps             - Show running processes
-  top            - Display system processes
-  df -h          - Show disk usage
-  free -h        - Show memory usage
-
-Image Commands:
-  g https://example.com/image.jpg  - Get image info
-  g domain.com/pic.png            - Auto-add https protocol
-
-Navigation:
-  ↑/↓ arrows     - Browse command history
-  Home           - Move to start of command
-  Ctrl+C         - Interrupt current command
-  Ctrl+L         - Clear screen
-
-Features:
-  • Full Linux command support
-  • Animated image information display
-  • Real-time typing animations
-  • Command history with arrow navigation
-  • Professional Kali Linux styling
-  • Thread-safe command execution
-
-Installation Note:
-  For full image display support, install:
-  sudo apt-get install python3-pil python3-pil.imagetk
-
-"""
-        self.animate_text(help_text, self.info_color, delay=5)
-
-    def show_history(self):
-        """Display command history"""
-        if not self.command_history:
-            self.append_output("No commands in history\n", self.info_color)
-            self.show_prompt()
-            return
-
-        self.append_output("Command History:\n", self.info_color)
-        for i, cmd in enumerate(self.command_history[-20:], 1):  # Last 20 commands
-            self.append_output(f"{i:3}: {cmd}\n", self.text_color)
-        self.show_prompt()
-
-    def show_about(self):
-        """Show about dialog"""
-        about_text = f"""Suadat Terminal v2.0
-
-Professional Linux Terminal Emulator
-Built with Python {sys.version.split()[0]} and Tkinter
-
-Features:
-• Kali Linux styling
-• Full command execution  
-• Animated image information
-• Command history
-• Real-time animations
-• Professional interface
-
-Created by: Suadat Bin Iqbal
-"""
-        messagebox.showinfo("About Suadat Terminal", about_text)
 
     def previous_command(self, event=None):
-        """Navigate to previous command"""
+        """Previous command [web:40]"""
         if self.command_history and self.history_index > 0:
             self.history_index -= 1
-            # Clear current command line
-            self.terminal_text.delete("prompt_end", tk.END)
-            # Insert previous command
-            self.terminal_text.insert(tk.END, self.command_history[self.history_index])
+            self.command_var.set(self.command_history[self.history_index])
+            self.command_entry.icursor(tk.END)
         return "break"
 
     def next_command(self, event=None):
-        """Navigate to next command"""
+        """Next command [web:40]"""
         if self.command_history and self.history_index < len(self.command_history) - 1:
             self.history_index += 1
-            # Clear current command line
-            self.terminal_text.delete("prompt_end", tk.END)
-            # Insert next command
-            self.terminal_text.insert(tk.END, self.command_history[self.history_index])
+            self.command_var.set(self.command_history[self.history_index])
+            self.command_entry.icursor(tk.END)
         elif self.history_index >= len(self.command_history) - 1:
             self.history_index = len(self.command_history)
-            # Clear current command line
-            self.terminal_text.delete("prompt_end", tk.END)
+            self.command_var.set('')
+        return "break"
+
+    def tab_completion(self, event=None):
+        """Tab completion"""
+        current_text = self.command_var.get()
+        cursor_pos = self.command_entry.index(tk.INSERT)
+        
+        if current_text:
+            # Simple completion for common commands
+            commands = ['help', 'clear', 'cd', 'ls', 'pwd', 'cat', 'grep', 'find', 'neofetch', 'weather', 'crypto', 'matrix', 'tree', 'htop']
+            matches = [cmd for cmd in commands if cmd.startswith(current_text)]
+            
+            if len(matches) == 1:
+                self.command_var.set(matches[0])
+                self.command_entry.icursor(tk.END)
+        
         return "break"
 
     def interrupt_command(self, event=None):
-        """Handle Ctrl+C"""
-        self.append_output("^C\n", self.error_color)
+        """Interrupt command"""
+        self.append_output("\n^C\n", self.colors['red'])
+        self.command_var.set('')
         self.show_prompt()
         return "break"
 
-    def increase_font(self):
-        """Increase font size"""
-        current_size = self.font[1]
-        new_font = (self.font[0], min(current_size + 1, 20))
-        self.font = new_font
-        self.terminal_text.config(font=new_font)
-
-    def decrease_font(self):
-        """Decrease font size"""
-        current_size = self.font[1]
-        new_font = (self.font[0], max(current_size - 1, 8))
-        self.font = new_font
-        self.terminal_text.config(font=new_font)
-
-    def new_terminal(self):
-        """Open new terminal window"""
-        new_root = tk.Toplevel()
-        SuadatTerminal(new_root)
-
     def load_config(self):
-        """Load terminal configuration"""
+        """Load configuration"""
         try:
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    self.font = tuple(config.get('font', self.font))
+                    self.font_size = config.get('font_size', self.font_size)
+                    self.font = (self.font_family, self.font_size)
         except:
             pass
 
     def save_config(self):
-        """Save terminal configuration"""
+        """Save configuration"""
         try:
             config = {
-                'font': list(self.font),
+                'font_size': self.font_size,
                 'current_dir': self.current_dir,
-                'history': self.command_history[-50:]  # Save last 50 commands
+                'history': self.command_history[-50:]
             }
             with open(self.config_file, 'w') as f:
                 json.dump(config, f, indent=2)
@@ -597,10 +592,10 @@ Created by: Suadat Bin Iqbal
         self.root.destroy()
 
 def main():
-    """Main application entry point"""
+    """Main entry point"""
     root = tk.Tk()
-    app = SuadatTerminal(root)
-
+    app = HyprlandTerminal(root)
+    
     try:
         root.mainloop()
     except KeyboardInterrupt:
